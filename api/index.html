@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gemini Chat App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #chat {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+
+        #input {
+            width: calc(100% - 80px);
+            padding: 10px;
+        }
+
+        #send {
+            width: 60px;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="chat">
+        <h2>Gemini Chat App</h2>
+        <div id="messages"></div>
+        <input type="text" id="input" placeholder="Ketik pesan Anda...">
+        <button id="send">Kirim</button>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const inputField = document.getElementById('input');
+        const sendButton = document.getElementById('send');
+
+        sendButton.addEventListener('click', async () => {
+            const message = inputField.value.trim();
+            if (!message) return;
+
+            // Tampilkan pesan pengguna
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.textContent = "Anda: " + message;
+            messagesDiv.appendChild(userMessageDiv);
+            inputField.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Pastikan mengirimkan key "chat" dan history (misalnya, kosong) sesuai dengan yang diharapkan server
+                    body: JSON.stringify({ chat: message, history: [] })
+                });
+                const data = await response.json();
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.innerHTML = "Arum: " + data.response;
+                messagesDiv.appendChild(botMessageDiv);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+    </script>
+</body>
+
+</html>
