@@ -3,12 +3,12 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const uuid = require('uuid');
+const axios = require('axios');
 const moment = require('moment-timezone');
 const { marked } = require('marked');
 
-// Import Gemini API SDK dan hardcode API key (development purpose only)
+// Import Gemini API SDK dan inisialisasi dengan API key secara hardcoded (hanya untuk development!)
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-// Hardcoded API key (gunakan dengan hati-hati, terutama di production)
 const genAI = new GoogleGenerativeAI("AIzaSyDMA2pw9dzbdkjkOb9hrieDxks7rhA4_BA");
 
 const app = express();
@@ -27,6 +27,7 @@ app.use(cors({
   credentials: true,
 }));
 
+// Tangani permintaan favicon agar tidak error
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Simulasi database untuk history percakapan
@@ -54,10 +55,15 @@ function saveConversationHistory(userId, history) {
   userConversations[userId] = history;
 }
 
+/*
+  Fungsi utama untuk chat dengan asisten pribadi menggunakan Gemini API.
+  Dilengkapi dengan retry logic dan update history percakapan.
+*/
 async function chatWithAssistant(userId, message, maxRetries = 5, initialDelay = 1000) {
   let history = getConversationHistory(userId);
   console.log("History sebelum dikirim:", JSON.stringify(history));
 
+  // Persiapkan system instruction. Perhatikan penggunaan getJakartaTime() untuk waktu saat ini.
   const systemInstructionText = `
 * **Prioritaskan jawaban yang SANGAT singkat, padat, jelas, dan menarik.**
 
@@ -67,16 +73,31 @@ Nama kamu adalah : Sera
 Kamu adalah asisten AI yang sangat profesional dan ramah, tugasmu adalah memberikan informasi tentang Reykal, merespons pertanyaan, dan menerima pesan untuknya.
 
 **Gaya Jawaban:**
-* **Profesional & Ramah:** Jawab dengan sopan dan antusias.
-* **Singkat, Jelas, Padat:** Informasi langsung ke intinya (maksimal 3-4 kalimat).
-* **Menarik:** Gunakan **bold** dan sedikit "pemanis" dalam jawaban.
-* **Selalu Tersenyum:** Akhiri jawaban dengan emoji (😊, 😄, 👍).
+* **Profesional dan Ramah:** Jawab dengan sopan, antusias, dan gunakan bahasa yang lugas namun tetap bersahabat.
+* **Singkat, Jelas, Padat:** Berikan informasi langsung ke intinya tanpa bertele-tele.
+* **Menarik:** Gunakan **bold** untuk membuat respons lebih menarik dan tambahkan sedikit pemanis.
+* **Selalu Tersenyum:** Akhiri jawaban dengan emoji senyum (😊, 😄, 👍).
 
-Saat ini adalah ${getJakartaTime()} WIB.
+Saat ini adalah ${getJakartaTime()}.
 
 **Informasi Tentang Reykal:**
 * **Nama Lengkap:** Reykal Hizbullah Al-Hikam  
-... (dan seterusnya sesuai kebutuhan) ...
+* **Tempat Tinggal:** Kota Depok  
+* **Umur:** 21 Tahun  
+* **Instagram:** @reyhkm  
+* **Email:** reyhikam04@gmail.com  
+* **Nomor Handphone:** +6289636153854  
+* **Alamat:** Jl. Adam Blok Haji Midin, Tugu, Cimanggis, Kota Depok, Jawa Barat  
+* **Tanggal Lahir:** 16 Maret 2004  
+* **Tempat Lahir:** Jakarta  
+* **Pacar:** Jihan Rizki  
+* **Alamat Pacar:** Cileunyi, Bandung  
+* **Jenis Kelamin:** Laki-laki  
+* **Pendidikan:** S1 Informatika, Universitas Gunadarma (Semester 6, IPK 3.75)  
+* **Keahlian:**  
+  * **Hard Skills:** Data Analysis, Excel tingkat lanjut, SQL  
+  * **Soft Skills:** Problem-solving, Communication, Empati, Kreativitas, Kejujuran, Berpikiran terbuka  
+* **Visi & Misi:** Mengasah kemampuan untuk membangun masa depan yang lebih baik melalui teknologi.
 `;
 
   const generationConfig = {
@@ -84,7 +105,7 @@ Saat ini adalah ${getJakartaTime()} WIB.
     topP: 0.95,
     topK: 64,
     maxOutputTokens: 8192,
-    responseMimeType: "text/plain",
+    responseMimeType: "text/plain"
   };
 
   const contents = [
@@ -92,7 +113,7 @@ Saat ini adalah ${getJakartaTime()} WIB.
     { role: 'user', parts: [{ text: message }] }
   ];
 
-  console.log("Payload yang dikirim:", JSON.stringify({ contents, generationConfig }, null, 2));
+  console.log("Payload dikirim:", JSON.stringify({ contents, generationConfig }, null, 2));
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -103,8 +124,7 @@ Saat ini adalah ${getJakartaTime()} WIB.
         contents,
         generationConfig,
       });
-
-      console.log("Raw response dari Gemini:", JSON.stringify(response, null, 2));
+      console.log("Raw response:", JSON.stringify(response, null, 2));
 
       if (response.response && response.response.candidates && response.response.candidates.length > 0) {
         const candidate = response.response.candidates[0].content;
@@ -114,55 +134,67 @@ Saat ini adalah ${getJakartaTime()} WIB.
         saveConversationHistory(userId, history);
         return marked(candidateText);
       } else {
-        throw new Error("Response from Gemini API is invalid.");
+        throw new Error("Response dari Gemini API tidak valid.");
       }
     } catch (error) {
       console.error(`Percobaan ke-${attempt + 1} gagal:`, error);
       if (error.message && (error.message.includes("503") || error.message.includes("overloaded"))) {
         if (attempt < maxRetries - 1) {
           const delay = initialDelay * (attempt + 1);
-          console.log(`Tunggu ${delay / 1000} detik sebelum mencoba lagi...`);
+          console.log(`Menunggu ${delay/1000} detik untuk mencoba lagi...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       } else {
-        return "Maaf, ada masalah: " + error.message;
+        return "Maaf, terjadi masalah: " + error.message;
       }
     }
   }
-  return "Maaf, sudah mencoba beberapa kali tapi masih gagal. Coba lagi nanti.";
+  return "Maaf, sudah mencoba beberapa kali tapi gagal. Coba lagi nanti.";
 }
 
+/*
+  Endpoint /chat menggunakan pendekatan callback.
+  Klien perlu mengirimkan:
+    - chat      : Pesan yang ingin diproses.
+    - callbackUrl : URL untuk menerima respons akhir.
+  
+  API ini segera mengembalikan respons bahwa permintaan telah diterima,
+  lalu memproses chat secara asinkron dan mengirimkan hasilnya ke callbackUrl.
+*/
+app.post('/chat', async (req, res) => {
+  const { userId, isNew } = getOrCreateUserId(req, res);
+  const { chat, callbackUrl } = req.body;
+  console.log(`User ${userId} mengirim pesan: ${chat}`);
+
+  if (!chat || !callbackUrl) {
+    return res.status(400).json({ message: "Parameter 'chat' dan 'callbackUrl' harus disediakan." });
+  }
+
+  // Respon segera ke klien untuk menghindari timeout
+  res.status(200).json({ message: "Permintaan diterima. Memproses, hasil akan dikirimkan melalui callback." });
+
+  // Proses background yang memanggil Gemini API dan mengirim callback
+  try {
+    const result = await chatWithAssistant(userId, chat);
+    await axios.post(callbackUrl, { response: result });
+    console.log(`Callback berhasil dikirim ke ${callbackUrl}`);
+  } catch (error) {
+    console.error("Error saat memproses chat:", error.message);
+    try {
+      await axios.post(callbackUrl, { error: error.message });
+    } catch (err) {
+      console.error("Gagal mengirim callback error:", err.message);
+    }
+  }
+});
+
+// (Opsional) Endpoint untuk halaman index jika file index.html tersedia
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-app.post('/chat', async (req, res) => {
-  const { userId, isNew } = getOrCreateUserId(req, res);
-  const userMessage = req.body.chat;
-  console.log(`User ID: ${userId}, Message: ${userMessage}`);
-
-  const botResponse = await chatWithAssistant(userId, userMessage);
-
-  if (isNew) {
-    res.cookie('user_id', userId, {
-      path: '/chat',
-      secure: true,
-      httpOnly: true,
-      sameSite: 'None',
-      maxAge: 600000 // 10 menit
-    });
-  }
-  res.json({ response: botResponse });
+// Mulai server di port yang ditentukan
+const PORT = process.env.PORT || 9000;
+app.listen(PORT, () => {
+  console.log(`Server berjalan pada port ${PORT}`);
 });
-
-// Jika dijalankan secara lokal, mulai server seperti biasa
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 9000;
-  app.listen(PORT, () => {
-    console.log(`Server berjalan pada port ${PORT}`);
-  });
-}
-
-const serverless = require('serverless-http');
-// Ekspor fungsi serverless sebagai default export yang valid untuk Vercel
-module.exports = serverless(app);
