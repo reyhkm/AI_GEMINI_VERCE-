@@ -1,1 +1,24 @@
-
+{
+  "name": "GEMINI_NODEJS",
+  "version": "1.0.0",
+  "description": "Gemini Node.js Chat Application for Vercel Deployment",
+  "main": "api/server.js",
+  "scripts": {
+    "start": "node api/server.js",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "axios": "^1.8.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "luxon": "^3.5.0",
+    "markdown-it": "^14.1.0",
+    "marked": "^15.0.7",
+    "moment-timezone": "^0.5.47",
+    "uuid": "^11.1.0",
+    "serverless-http": "^2.7.0"
+  }
+}
