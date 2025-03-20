@@ -27,6 +27,8 @@ app.use(cors({
   credentials: true,
 }));
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Simulasi database untuk history percakapan
 const userConversations = {};
 
